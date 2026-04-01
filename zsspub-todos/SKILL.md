@@ -1,6 +1,6 @@
 ---
 name: zsspub-todos
-description: "管理存储在 SQLite 中的个人待办事项列表。适用场景：添加待办、列出待办、完成待办、删除待办、更新待办、按优先级/标签/截止日期筛选、检查任务、跟踪任务，待办事项，任务管理，添加任务，查看任务，完成任务，删除任务"
+description: "管理存储在 SQLite 中的个人待办事项列表。适用场景：添加待办、列出待办、完成待办、删除待办、更新待办、按优先级/标签/截止日期筛选、检查任务、跟踪任务，待办事项，任务管理，添加任务，查看任务，完成任务，删除任务，todo，TODO，备忘，备忘录，记录，提醒，事项，清单，任务清单，todo list，task，tasks"
 argument-hint: "add|list|done|delete|update [选项]"
 metadata:
   version: "1.0.0"
@@ -20,15 +20,13 @@ metadata:
 
 脚本通过 `import.meta.dirname` 自动解析该路径，无需手动配置。
 
-## 脚本路径
+## 安装命令
 
-脚本位于此 SKILL.md 文件同级的 `./scripts/todos.mjs`。
-
-运行时请使用脚本的**绝对路径**（根据 SKILL.md 的安装位置解析）：
+首次使用前，在 skill 目录下执行一次：
+```bash
+cd {skill_install_dir}/zsspub-todos && npm link
 ```
-node --no-warnings {skill_install_dir}/zsspub-todos/scripts/todos.mjs <命令> [选项]
-```
-> `--no-warnings` 用于抑制 `node:sqlite` 的 `ExperimentalWarning`（Node.js < 24 稳定版中存在）。
+执行后 `zsspub_todos` 即注册为全局命令，后续直接使用即可。
 
 ## 环境要求
 
@@ -38,7 +36,7 @@ node --no-warnings {skill_install_dir}/zsspub-todos/scripts/todos.mjs <命令> [
 
 ### 添加待办
 ```
-node todos.mjs add "标题" [--priority=low|medium|high] [--tags=标签1,标签2] [--due="YYYY-MM-DD HH:mm:ss"]
+zsspub_todos add "标题" [--priority=low|medium|high] [--tags=标签1,标签2] [--due="YYYY-MM-DD HH:mm:ss"]
 ```
 - `--priority`：优先级，`low`（低）、`medium`（中，默认）或 `high`（高）
 - `--tags`：逗号分隔的标签列表，例如 `工作,紧急`
@@ -46,25 +44,25 @@ node todos.mjs add "标题" [--priority=low|medium|high] [--tags=标签1,标签2
 
 ### 列出待办
 ```
-node todos.mjs list [--status=pending|done|all] [--priority=low|medium|high] [--tag=标签名] [--due-before="YYYY-MM-DD HH:mm:ss"] [--due-after="YYYY-MM-DD HH:mm:ss"]
+zsspub_todos list [--status=pending|done|all] [--priority=low|medium|high] [--tag=标签名] [--due-before="YYYY-MM-DD HH:mm:ss"] [--due-after="YYYY-MM-DD HH:mm:ss"]
 ```
 - 默认：仅列出 `pending`（待完成）的待办
 - 排序规则：优先级（高→低）、截止日期（最早优先）、id
 
 ### 标记为完成
 ```
-node todos.mjs done <id>
+zsspub_todos done <id>
 ```
 
 ### 删除待办
 ```
-node todos.mjs delete <id>
+zsspub_todos delete <id>
 ```
 别名：`del`、`rm`
 
 ### 更新待办
 ```
-node todos.mjs update <id> [--title="新标题"] [--priority=...] [--tags=...] [--due="YYYY-MM-DD HH:mm:ss"]
+zsspub_todos update <id> [--title="新标题"] [--priority=...] [--tags=...] [--due="YYYY-MM-DD HH:mm:ss"]
 ```
 - 清除截止日期：`--due=null`
 
@@ -72,9 +70,8 @@ node todos.mjs update <id> [--title="新标题"] [--priority=...] [--tags=...] [
 
 ## 使用流程
 
-1. 根据 SKILL.md 的安装位置确定 `scripts/todos.mjs` 的**绝对路径**。
-2. 使用 `node <todos.mjs的绝对路径> <命令> [选项]` 执行对应命令。
-3. 将脚本输出呈现给用户。
+1. 直接执行 `zsspub_todos <命令> [选项]`。
+2. 将命令输出呈现给用户。
 
 ## 字段说明
 
@@ -92,29 +89,29 @@ node todos.mjs update <id> [--title="新标题"] [--priority=...] [--tags=...] [
 
 ```bash
 # 添加一个今晚截止的高优先级任务
-node --no-warnings todos.mjs add "提交报告" --priority=high --tags=工作 --due="2026-04-01 23:59:00"
+zsspub_todos add "提交报告" --priority=high --tags=工作 --due="2026-04-01 23:59:00"
 
 # 列出所有待完成任务
-node --no-warnings todos.mjs list
+zsspub_todos list
 
 # 列出所有任务（包括已完成）
-node --no-warnings todos.mjs list --status=all
+zsspub_todos list --status=all
 
 # 仅列出高优先级任务
-node --no-warnings todos.mjs list --priority=high
+zsspub_todos list --priority=high
 
 # 按标签筛选
-node --no-warnings todos.mjs list --tag=工作
+zsspub_todos list --tag=工作
 
 # 按截止日期筛选
-node --no-warnings todos.mjs list --due-before="2026-04-07 00:00:00"
+zsspub_todos list --due-before="2026-04-07 00:00:00"
 
 # 将第 3 条待办标记为完成
-node --no-warnings todos.mjs done 3
+zsspub_todos done 3
 
 # 更新第 2 条待办的标题和截止日期
-node --no-warnings todos.mjs update 2 --title="修订后的标题" --due="2026-05-01 09:00:00"
+zsspub_todos update 2 --title="修订后的标题" --due="2026-05-01 09:00:00"
 
 # 删除第 5 条待办
-node --no-warnings todos.mjs delete 5
+zsspub_todos delete 5
 ```

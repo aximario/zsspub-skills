@@ -1,0 +1,12 @@
+{
+  "name": "zsspub-todos",
+  "version": "1.0.0",
+  "description": "管理存储在 SQLite 中的个人待办事项列表",
+  "type": "module",
+  "bin": {
+    "zsspub_todos": "./scripts/todos.mjs"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
