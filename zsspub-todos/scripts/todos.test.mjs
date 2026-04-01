@@ -166,6 +166,62 @@ describe('list 命令', () => {
     assert.notEqual(status, 0);
     assert.match(stderr, /low、medium 或 high/);
   });
+
+  test('--search 按关键字筛选', () => {
+    const { dir: d, env: e } = makeTmpEnv();
+    try {
+      run(e, 'add', '提交季度报告');
+      run(e, 'add', '买菜');
+      const { stdout, status } = run(e, 'list', '--search=报告');
+      assert.equal(status, 0);
+      assert.match(stdout, /提交季度报告/);
+      assert.doesNotMatch(stdout, /买菜/);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+
+  test('--search 无匹配时提示没有找到', () => {
+    const { dir: d, env: e } = makeTmpEnv();
+    try {
+      run(e, 'add', '买菜');
+      const { stdout, status } = run(e, 'list', '--search=不存在的关键字');
+      assert.equal(status, 0);
+      assert.match(stdout, /没有找到/);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+
+  test('过期任务显示 ⚠️已过期 标注', () => {
+    const { dir: d, env: e } = makeTmpEnv();
+    try {
+      run(e, 'add', '过期任务', '--due=2020-01-01 00:00:00');
+      run(e, 'add', '未来任务', '--due=2099-12-31 23:59:59');
+      const { stdout } = run(e, 'list');
+      assert.match(stdout, /⚠️已过期/);
+      // 未来任务不应显示过期标注
+      const futureLineMatch = stdout.match(/未来任务.*/);
+      if (futureLineMatch) {
+        assert.doesNotMatch(futureLineMatch[0], /⚠️已过期/);
+      }
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+
+  test('已完成的过期任务不显示 ⚠️已过期', () => {
+    const { dir: d, env: e } = makeTmpEnv();
+    try {
+      run(e, 'add', '完成的过期任务', '--due=2020-01-01 00:00:00');
+      const id = run(e, 'list').stdout.match(/(\d+)\./)?.[1];
+      run(e, 'done', id);
+      const { stdout } = run(e, 'list', '--status=done');
+      assert.doesNotMatch(stdout, /⚠️已过期/);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
 });
 
 // ── done 命令 ─────────────────────────────────────────────────────────────────

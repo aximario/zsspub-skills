@@ -1,2 +1,5 @@
 # Todo skill data files (per-user, not committed)
-data/
+zsspub-todos/data/
+log/
+.agents/
+skills-lock.json

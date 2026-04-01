@@ -64,9 +64,17 @@ const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 const PRIORITY_EMOJI = { high: '🔴', medium: '🟡', low: '🟢' };
 const STATUS_LABEL = { pending: '[ ]', done: '[x]' };
 
+function getNowLocal() {
+  const n = new Date();
+  const p = v => String(v).padStart(2, '0');
+  return `${n.getFullYear()}-${p(n.getMonth()+1)}-${p(n.getDate())} ${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
+}
+
 function formatRow(t) {
   const pri = PRIORITY_EMOJI[t.priority] ?? t.priority;
-  const due = t.due_date ? ` 截止:${t.due_date}` : '';
+  const now = getNowLocal();
+  const overdue = t.due_date && t.status === 'pending' && t.due_date < now ? ' ⚠️已过期' : '';
+  const due = t.due_date ? ` 截止:${t.due_date}${overdue}` : '';
   const tags = t.tags ? ` [${t.tags}]` : '';
   return `  ${t.id}. ${STATUS_LABEL[t.status] ?? t.status} ${pri} ${t.title}${tags}${due}  (创建时间: ${t.created_at})`;
 }
@@ -144,6 +152,10 @@ function cmdList(flags) {
     // 在逗号分隔的标签列表中匹配标签
     conditions.push("(',' || tags || ',' LIKE ?)");
     params.push(`%,${flags.tag},%`);
+  }
+  if (flags.search) {
+    conditions.push('title LIKE ?');
+    params.push(`%${flags.search}%`);
   }
   if (flags['due-before']) {
     validateDue(flags['due-before']);
@@ -282,7 +294,7 @@ switch (cmd) {
 待办事项技能脚本
 用法：
   node todos.mjs add "标题" [--priority=low|medium|high] [--tags=标签1,标签2] [--due="YYYY-MM-DD HH:mm:ss"]
-  node todos.mjs list [--status=pending|done|all] [--priority=low|medium|high] [--tag=标签名] [--due-before="YYYY-MM-DD HH:mm:ss"] [--due-after="YYYY-MM-DD HH:mm:ss"]
+  node todos.mjs list [--status=pending|done|all] [--priority=low|medium|high] [--tag=标签名] [--search=关键字] [--due-before="YYYY-MM-DD HH:mm:ss"] [--due-after="YYYY-MM-DD HH:mm:ss"]
   node todos.mjs done <id>
   node todos.mjs delete <id>
   node todos.mjs update <id> [--title="新标题"] [--priority=low|medium|high] [--tags=标签1,标签2] [--due="YYYY-MM-DD HH:mm:ss"]
