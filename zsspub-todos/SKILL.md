@@ -3,13 +3,15 @@ name: zsspub-todos
 description: "管理存储在本地 SQLite 中的个人待办事项列表，支持添加、查看、完成、删除、更新和搜索任务，以及按优先级、标签、截止日期筛选。每当用户提到要记一件事、提醒自己做某事、查看今天有什么任务、把某件事标记为完成、想整理一下待办清单、搜索待办内容，都应主动使用这个 skill，即使用户没有明确说“todo”或“待办”。英文场景同样适用，如 remind me to、add to my todo list、what do I have today、mark X as done。"
 argument-hint: "add|list|done|delete|update [选项]"
 metadata:
-  version: "1.0.0"
+  version: "1.0.1"
   author: https://github.com/aximario(zengshushu)
+  license: MIT
+  updated_at: "2026-04-01"
 ---
 
 # 待办事项技能
 
-基于本地 SQLite 数据库管理持久化待办事项列表。数据文件由脚本通过 `import.meta.dirname` 自动定位，存放在 skill 目录下的 `data/zsspub-todos/data.sqlite`，无需手动配置路径。
+基于本地 SQLite 数据库管理持久化待办事项列表。数据文件由脚本通过 `import.meta.dirname` 自动定位，存放在与 skill 目录同级的 `skills-data/zsspub-todos/data.sqlite`，无需手动配置路径。
 
 ## 环境要求
 

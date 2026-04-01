@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @version 1.0.0
+// @version 1.0.1
 // @author  https://github.com/aximario
 
 // 需要 Node.js >= 22.5.0（node:sqlite 作为实验性功能可用）
@@ -14,10 +14,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-// ── 数据路径：{skill_install_dir}/data/zsspub-todos/data.sqlite ──────────
+// ── 数据路径：{skill_install_dir}/../skills-data/zsspub-todos/data.sqlite ──
+// 即与 skill 目录（zsspub-todos/）同级的 skills-data/zsspub-todos/ 下
 // 可通过环境变量 TODO_DB_PATH 覆盖（主要用于测试隔离）
 const SKILL_DIR = resolve(import.meta.dirname, '..');
-const DATA_DIR = join(SKILL_DIR, 'data', 'zsspub-todos');
+const DATA_DIR = join(SKILL_DIR, '..', 'skills-data', 'zsspub-todos');
 const DB_PATH = process.env.TODO_DB_PATH ?? join(DATA_DIR, 'data.sqlite');
 
 if (!existsSync(DATA_DIR)) {
