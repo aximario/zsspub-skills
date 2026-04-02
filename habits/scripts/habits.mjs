@@ -14,11 +14,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-// ── 数据路径：{skill_install_dir}/../.data/zsspub-checkin/data.sqlite ──
+// ── 数据路径：{skill_install_dir}/../.data/zsspub/habits/data.sqlite ──
 const SKILL_DIR = resolve(import.meta.dirname, '..');
-const DATA_DIR = join(SKILL_DIR, '..', '.data', 'zsspub-checkin');
-const DB_PATH = process.env.CHECKIN_DB_PATH ?? join(DATA_DIR, 'data.sqlite');
-const CONFIG_PATH = process.env.CHECKIN_CONFIG_PATH ?? join(DATA_DIR, 'config.json');
+const DATA_DIR = join(SKILL_DIR, '..', '.data', 'zsspub', 'checkin');
+const DB_PATH = process.env.HABITS_DB_PATH ?? join(DATA_DIR, 'data.sqlite');
+const CONFIG_PATH = process.env.HABITS_CONFIG_PATH ?? join(DATA_DIR, 'config.json');
 
 const DATA_VERSION = '1.0.0';
 
@@ -198,7 +198,7 @@ function validateDate(val, label) {
 function cmdAdd(flags, positional) {
   const topic = positional[0];
   if (!topic) {
-    console.error('错误：主题不能为空。\n  用法：add "主题" [--tags=标签1,标签2] [--duration=分钟数] [--note="备注"] [--at="YYYY-MM-DD HH:mm:ss"]');
+    console.error('错误：主题不能为空。\n  用法：add "主题" --raw="用户原话" [--tags=标签1,标签2] [--duration=分钟数] [--note="备注"] [--at="YYYY-MM-DD HH:mm:ss"]');
     process.exit(1);
   }
   const tags = flags.tags ?? '';
@@ -212,7 +212,11 @@ function cmdAdd(flags, positional) {
     }
   }
   const note = flags.note ?? '';
-  const raw_input = flags.raw ?? '';
+  const raw_input = flags.raw;
+  if (!raw_input) {
+    console.error('错误：--raw 参数为必填项，请传入用户的原始输入。\n  用法：add "主题" --raw="用户原话" [--tags=标签1,标签2] [--duration=分钟数] [--note="备注"] [--at="YYYY-MM-DD HH:mm:ss"]');
+    process.exit(1);
+  }
   const rawAt = validateDatetime(flags.at ?? null, '--at');
   const checked_at = rawAt ? tzToUTC(rawAt, config.timezone) : getNowUTCStr();
 

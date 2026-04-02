@@ -1,9 +1,9 @@
 /**
- * checkin.mjs 集成测试
+ * habits.mjs 集成测试
  * 运行方式：node --no-warnings --test scripts/checkin.test.mjs
  *
  * 使用 Node.js 内置 node:test + node:assert，无需任何第三方依赖。
- * 每次测试通过 CHECKIN_DB_PATH 环境变量指向临时数据库，测试结束后自动清理。
+ * 每次测试通过 HABITS_DB_PATH 环境变量指向临时数据库，测试结束后自动清理。
  */
 
 import { describe, test, before, after } from 'node:test';
@@ -14,14 +14,14 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-const SCRIPT = fileURLToPath(new URL('./checkin.mjs', import.meta.url));
+const SCRIPT = fileURLToPath(new URL('./habits.mjs', import.meta.url));
 
 function makeTmpEnv() {
-  const dir = mkdtempSync(join(tmpdir(), 'checkin-test-'));
+  const dir = mkdtempSync(join(tmpdir(), 'habits-test-'));
   const env = {
     ...process.env,
-    CHECKIN_DB_PATH: join(dir, 'test.sqlite'),
-    CHECKIN_CONFIG_PATH: join(dir, 'config.json'),
+    HABITS_DB_PATH: join(dir, 'test.sqlite'),
+    HABITS_CONFIG_PATH: join(dir, 'config.json'),
   };
   return { dir, env };
 }
@@ -46,14 +46,14 @@ describe('add 命令', () => {
   after(() => rmSync(dir, { recursive: true, force: true }));
 
   test('基本添加（仅主题）', () => {
-    const { stdout, status } = run(env, 'add', '骑行');
+    const { stdout, status } = run(env, 'add', '骑行', '--raw=测试');
     assert.equal(status, 0);
     assert.match(stdout, /已打卡/);
     assert.match(stdout, /骑行/);
   });
 
   test('添加带标签和时长', () => {
-    const { stdout, status } = run(env, 'add', '跑步', '--tags=运动', '--duration=40');
+    const { stdout, status } = run(env, 'add', '跑步', '--tags=运动', '--duration=40', '--raw=测试');
     assert.equal(status, 0);
     assert.match(stdout, /跑步/);
     assert.match(stdout, /\[运动\]/);
@@ -61,7 +61,7 @@ describe('add 命令', () => {
   });
 
   test('添加带备注', () => {
-    const { stdout, status } = run(env, 'add', '阅读', '--tags=学习', '--note=《原则》第三章');
+    const { stdout, status } = run(env, 'add', '阅读', '--tags=学习', '--note=《原则》第三章', '--raw=测试');
     assert.equal(status, 0);
     assert.match(stdout, /阅读/);
     assert.match(stdout, /📝《原则》第三章/);
@@ -74,33 +74,39 @@ describe('add 命令', () => {
   });
 
   test('添加带打卡时间', () => {
-    const { stdout, status } = run(env, 'add', '冥想', '--at=2026-04-01 08:00:00');
+    const { stdout, status } = run(env, 'add', '冥想', '--at=2026-04-01 08:00:00', '--raw=测试');
     assert.equal(status, 0);
     assert.match(stdout, /冥想/);
   });
 
   test('主题为空时报错', () => {
-    const { stderr, status } = run(env, 'add');
+    const { stderr, status } = run(env, 'add', '--raw=测试');
     assert.notEqual(status, 0);
     assert.match(stderr, /主题不能为空/);
   });
 
   test('无效时长报错', () => {
-    const { stderr, status } = run(env, 'add', '骑行', '--duration=abc');
+    const { stderr, status } = run(env, 'add', '骑行', '--duration=abc', '--raw=测试');
     assert.notEqual(status, 0);
     assert.match(stderr, /正整数/);
   });
 
   test('时长为零报错', () => {
-    const { stderr, status } = run(env, 'add', '骑行', '--duration=0');
+    const { stderr, status } = run(env, 'add', '骑行', '--duration=0', '--raw=测试');
     assert.notEqual(status, 0);
     assert.match(stderr, /正整数/);
   });
 
   test('打卡时间格式错误报错', () => {
-    const { stderr, status } = run(env, 'add', '骑行', '--at=2026/04/01');
+    const { stderr, status } = run(env, 'add', '骑行', '--at=2026/04/01', '--raw=测试');
     assert.notEqual(status, 0);
     assert.match(stderr, /YYYY-MM-DD HH:mm:ss/);
+  });
+
+  test('缺少 --raw 报错', () => {
+    const { stderr, status } = run(env, 'add', '骑行');
+    assert.notEqual(status, 0);
+    assert.match(stderr, /--raw/);
   });
 });
 
@@ -109,9 +115,9 @@ describe('list 命令', () => {
   let env, dir;
   before(() => {
     ({ dir, env } = makeTmpEnv());
-    run(env, 'add', '骑行', '--tags=运动', '--duration=30', '--at=2026-04-02 10:00:00');
-    run(env, 'add', '阅读', '--tags=学习', '--note=第一章', '--at=2026-04-02 20:00:00');
-    run(env, 'add', '跑步', '--tags=运动', '--duration=45', '--at=2026-04-01 18:00:00');
+    run(env, 'add', '骑行', '--tags=运动', '--duration=30', '--at=2026-04-02 10:00:00', '--raw=测试');
+    run(env, 'add', '阅读', '--tags=学习', '--note=第一章', '--at=2026-04-02 20:00:00', '--raw=测试');
+    run(env, 'add', '跑步', '--tags=运动', '--duration=45', '--at=2026-04-01 18:00:00', '--raw=测试');
   });
   after(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -164,7 +170,7 @@ describe('update 命令', () => {
   let env, dir;
   before(() => {
     ({ dir, env } = makeTmpEnv());
-    run(env, 'add', '骑行', '--tags=运动', '--duration=30');
+    run(env, 'add', '骑行', '--tags=运动', '--duration=30', '--raw=测试');
   });
   after(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -224,8 +230,8 @@ describe('delete 命令', () => {
   let env, dir;
   before(() => {
     ({ dir, env } = makeTmpEnv());
-    run(env, 'add', '骑行', '--tags=运动');
-    run(env, 'add', '跑步', '--tags=运动');
+    run(env, 'add', '骑行', '--tags=运动', '--raw=测试');
+    run(env, 'add', '跑步', '--tags=运动', '--raw=测试');
   });
   after(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -254,9 +260,9 @@ describe('stats 命令', () => {
   let env, dir;
   before(() => {
     ({ dir, env } = makeTmpEnv());
-    run(env, 'add', '骑行', '--tags=运动', '--duration=30', '--at=2026-04-02 10:00:00');
-    run(env, 'add', '跑步', '--tags=运动', '--duration=45', '--at=2026-04-02 18:00:00');
-    run(env, 'add', '阅读', '--tags=学习', '--duration=60', '--at=2026-04-02 21:00:00');
+    run(env, 'add', '骑行', '--tags=运动', '--duration=30', '--at=2026-04-02 10:00:00', '--raw=测试');
+    run(env, 'add', '跑步', '--tags=运动', '--duration=45', '--at=2026-04-02 18:00:00', '--raw=测试');
+    run(env, 'add', '阅读', '--tags=学习', '--duration=60', '--at=2026-04-02 21:00:00', '--raw=测试');
   });
   after(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -288,11 +294,11 @@ describe('streak 命令', () => {
   before(() => {
     ({ dir, env } = makeTmpEnv());
     // 连续 3 天打卡
-    run(env, 'add', '骑行', '--tags=运动', '--at=2026-03-31 10:00:00');
-    run(env, 'add', '骑行', '--tags=运动', '--at=2026-04-01 10:00:00');
-    run(env, 'add', '骑行', '--tags=运动', '--at=2026-04-02 10:00:00');
+    run(env, 'add', '骑行', '--tags=运动', '--at=2026-03-31 10:00:00', '--raw=测试');
+    run(env, 'add', '骑行', '--tags=运动', '--at=2026-04-01 10:00:00', '--raw=测试');
+    run(env, 'add', '骑行', '--tags=运动', '--at=2026-04-02 10:00:00', '--raw=测试');
     // 另一个主题只有 1 天
-    run(env, 'add', '阅读', '--tags=学习', '--at=2026-04-02 20:00:00');
+    run(env, 'add', '阅读', '--tags=学习', '--at=2026-04-02 20:00:00', '--raw=测试');
   });
   after(() => rmSync(dir, { recursive: true, force: true }));
 

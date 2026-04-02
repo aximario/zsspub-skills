@@ -14,11 +14,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-// ── 数据路径：{skill_install_dir}/../.data/zsspub-todos/data.sqlite ──
-// 即与 skill 目录（zsspub-todos/）同级的 .data/zsspub-todos/ 目录下
+// ── 数据路径：{skill_install_dir}/../.data/zsspub/todos/data.sqlite ──
+// 即与 skill 目录同级的 .data/zsspub/todos/ 目录下
 // 可通过环境变量 TODO_DB_PATH 覆盖（主要用于测试隔离）
 const SKILL_DIR = resolve(import.meta.dirname, '..');
-const DATA_DIR = join(SKILL_DIR, '..', '.data', 'zsspub-todos');
+const DATA_DIR = join(SKILL_DIR, '..', '.data', 'zsspub', 'todos');
 const DB_PATH = process.env.TODO_DB_PATH ?? join(DATA_DIR, 'data.sqlite');
 
 // ── 数据版本（与 SKILL.md metadata.data_version 保持同步）──────────────────
