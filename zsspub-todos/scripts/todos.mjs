@@ -11,7 +11,7 @@ if (major < 22 || (major === 22 && minor < 5)) {
 }
 
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync, existsSync } from 'node:fs';
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 // ── 数据路径：{skill_install_dir}/../.data/zsspub-todos/data.sqlite ──
@@ -21,9 +21,17 @@ const SKILL_DIR = resolve(import.meta.dirname, '..');
 const DATA_DIR = join(SKILL_DIR, '..', '.data', 'zsspub-todos');
 const DB_PATH = process.env.TODO_DB_PATH ?? join(DATA_DIR, 'data.sqlite');
 
+// ── 数据版本（与 SKILL.md metadata.data_version 保持同步）──────────────────
+// data_version 与 skill 代码版本（version）独立，仅代表数据库结构/配置版本
+const DATA_VERSION = '1.0.0';
+const CONFIG_PATH = process.env.TODO_CONFIG_PATH ?? join(DATA_DIR, 'config.json');
+
 if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });
 }
+
+// ── 配置加载 ──────────────────────────────────────────────────────────────────
+const config = loadConfig();
 
 const db = new DatabaseSync(DB_PATH);
 
@@ -39,6 +47,9 @@ db.exec(`
     created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
   )
 `);
+
+// ── 数据迁移 ──────────────────────────────────────────────────────────────────
+runMigrations(config, db);
 
 // ── 参数解析器 ───────────────────────────────────────────────────────────────
 /** 解析命令行参数，返回 { positional: string[], flags: Record<string, string|boolean> } */
@@ -65,41 +76,104 @@ function parseArgs(argv) {
 const PRIORITY_EMOJI = { high: '🔴', medium: '🟡', low: '🟢' };
 const STATUS_LABEL = { pending: '[ ]', done: '[x]' };
 
-/** 将 "YYYY-MM-DD HH:mm:ss"（本地时间）转换为 UTC 格式字符串 */
-function localToUTC(localStr) {
-  const [datePart, timePart] = localStr.split(' ');
-  const [year, month, day] = datePart.split('-').map(Number);
-  const [hour, min, sec] = timePart.split(':').map(Number);
-  const d = new Date(year, month - 1, day, hour, min, sec);
-  const p = v => String(v).padStart(2, '0');
-  return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+/** 加载 config.json；不存在时创建默认配置（UTC 时区、当前数据版本）并写入磁盘 */
+function loadConfig() {
+  if (!existsSync(CONFIG_PATH)) {
+    const defaults = { data_version: DATA_VERSION, timezone: 'UTC' };
+    writeFileSync(CONFIG_PATH, JSON.stringify(defaults, null, 2), 'utf8');
+    return defaults;
+  }
+  try {
+    return JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
+  } catch {
+    console.error('错误：config.json 解析失败，请检查文件格式。');
+    process.exit(1);
+  }
 }
 
-/** 将 "YYYY-MM-DD HH:mm:ss"（UTC）转换为本地时间格式字符串 */
-function utcToLocal(utcStr) {
-  const [datePart, timePart] = utcStr.split(' ');
-  const [year, month, day] = datePart.split('-').map(Number);
-  const [hour, min, sec] = timePart.split(':').map(Number);
-  const d = new Date(Date.UTC(year, month - 1, day, hour, min, sec));
+/** 将配置对象序列化并写回 config.json */
+function saveConfig(cfg) {
+  writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+}
+
+// ── 数据迁移策略（key 格式："{from_version}->{to_version}"）──────────────────
+// 当 config.data_version 落后于 DATA_VERSION 时，按 key 匹配对应迁移函数执行
+const MIGRATIONS = {
+  // 未来在此添加迁移函数，例如：
+  // '1.0.0->1.1.0': (db) => { db.exec('ALTER TABLE todos ADD COLUMN note TEXT'); },
+};
+
+/** 检测并执行数据迁移；成功后自动更新 config.data_version 并写回磁盘 */
+function runMigrations(cfg, db) {
+  if (cfg.data_version === DATA_VERSION) return;
+  const key = `${cfg.data_version}->${DATA_VERSION}`;
+  if (!MIGRATIONS[key]) {
+    console.error(`[迁移] 未找到从 ${cfg.data_version} 到 ${DATA_VERSION} 的迁移策略，请更新 skill。`);
+    process.exit(1);
+  }
+  console.log(`[迁移] 数据版本 ${cfg.data_version} → ${DATA_VERSION}，开始迁移…`);
+  try {
+    MIGRATIONS[key](db);
+    cfg.data_version = DATA_VERSION;
+    saveConfig(cfg);
+    console.log('[迁移] 完成。');
+  } catch (err) {
+    console.error(`[迁移] 失败：${err.message}`);
+    process.exit(1);
+  }
+}
+
+/** 将 UTC 时间字符串 "YYYY-MM-DD HH:mm:ss" 转换为指定 IANA 时区的本地时间字符串 */
+function utcToTZ(utcStr, tz) {
+  const [dp, tp] = utcStr.split(' ');
+  const [y, mo, d] = dp.split('-').map(Number);
+  const [h, mi, s] = tp.split(':').map(Number);
+  const fmt = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: tz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+  return fmt.format(new Date(Date.UTC(y, mo - 1, d, h, mi, s))).replace('T', ' ');
+}
+
+/** 将指定 IANA 时区的本地时间字符串 "YYYY-MM-DD HH:mm:ss" 转换为 UTC 时间字符串 */
+function tzToUTC(localStr, tz) {
+  const [dp, tp] = localStr.split(' ');
+  const [y, mo, d] = dp.split('-').map(Number);
+  const [h, mi, s] = tp.split(':').map(Number);
+  // 将 localStr 视为 UTC 求出 naiveMs，再用目标时区格式化得到该时刻在 tz 中的表示，
+  // 二者差值即为偏移量，据此还原真实 UTC
+  const naiveMs = Date.UTC(y, mo - 1, d, h, mi, s);
+  const fmt = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: tz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+  const tzStr = fmt.format(new Date(naiveMs)).replace('T', ' ');
+  const [dp2, tp2] = tzStr.split(' ');
+  const [y2, mo2, d2] = dp2.split('-').map(Number);
+  const [h2, mi2, s2] = tp2.split(':').map(Number);
+  const tzMs = Date.UTC(y2, mo2 - 1, d2, h2, mi2, s2);
+  const r = new Date(2 * naiveMs - tzMs);
   const p = v => String(v).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return `${r.getUTCFullYear()}-${p(r.getUTCMonth()+1)}-${p(r.getUTCDate())} ${p(r.getUTCHours())}:${p(r.getUTCMinutes())}:${p(r.getUTCSeconds())}`;
 }
 
 /** 返回当前 UTC 时间字符串 "YYYY-MM-DD HH:mm:ss" */
-function getNowUTC() {
-  const n = new Date();
-  const p = v => String(v).padStart(2, '0');
-  return `${n.getUTCFullYear()}-${p(n.getUTCMonth()+1)}-${p(n.getUTCDate())} ${p(n.getUTCHours())}:${p(n.getUTCMinutes())}:${p(n.getUTCSeconds())}`;
+function getNowUTCStr() {
+  return new Date().toISOString().replace('T', ' ').slice(0, 19);
 }
 
 /** 将一条待办记录格式化为单行显示字符串，包含序号、状态、优先级、标题、标签、截止时间和创建时间 */
 function formatRow(t) {
   const pri = PRIORITY_EMOJI[t.priority] ?? t.priority;
-  const now = getNowUTC();
+  const now = getNowUTCStr();
   const overdue = t.due_date && t.status === 'pending' && t.due_date < now ? ' ⚠️已过期' : '';
-  const due = t.due_date ? ` 截止:${utcToLocal(t.due_date)}${overdue}` : '';
+  const due = t.due_date ? ` 截止:${utcToTZ(t.due_date, config.timezone)}${overdue}` : '';
   const tags = t.tags ? ` [${t.tags}]` : '';
-  return `  ${t.id}. ${STATUS_LABEL[t.status] ?? t.status} ${pri} ${t.title}${tags}${due}  (创建时间: ${utcToLocal(t.created_at)})`;
+  return `  ${t.id}. ${STATUS_LABEL[t.status] ?? t.status} ${pri} ${t.title}${tags}${due}  (创建时间: ${utcToTZ(t.created_at, config.timezone)})`;
 }
 
 /** 将待办列表打印到控制台，若为空则提示无结果 */
@@ -142,7 +216,7 @@ function cmdAdd(flags, positional) {
   }
   const tags = flags.tags ?? '';
   const rawDue = validateDue(flags.due ?? null);
-  const due_date = rawDue ? localToUTC(rawDue) : null;
+  const due_date = rawDue ? tzToUTC(rawDue, config.timezone) : null;
 
   const stmt = db.prepare(
     'INSERT INTO todos (title, priority, tags, due_date) VALUES (?, ?, ?, ?)'
@@ -188,12 +262,12 @@ function cmdList(flags) {
   if (flags['due-before']) {
     validateDue(flags['due-before']);
     conditions.push('due_date <= ?');
-    params.push(localToUTC(flags['due-before']));
+    params.push(tzToUTC(flags['due-before'], config.timezone));
   }
   if (flags['due-after']) {
     validateDue(flags['due-after']);
     conditions.push('due_date >= ?');
-    params.push(localToUTC(flags['due-after']));
+    params.push(tzToUTC(flags['due-after'], config.timezone));
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -279,7 +353,7 @@ function cmdUpdate(positional, flags) {
   }
   if (flags.due !== undefined) {
     const rawDue = validateDue(flags.due === 'null' ? null : flags.due);
-    const due = rawDue ? localToUTC(rawDue) : null;
+    const due = rawDue ? tzToUTC(rawDue, config.timezone) : null;
     updates.push('due_date = ?');
     params.push(due);
   }
@@ -294,6 +368,25 @@ function cmdUpdate(positional, flags) {
   const row = db.prepare('SELECT * FROM todos WHERE id = ?').get(id);
   console.log('\n已更新:\n');
   console.log(formatRow(row));
+  console.log();
+}
+
+/** config 命令：查看或更新本地配置（时区、数据版本） */
+function cmdConfig(flags) {
+  if (flags.timezone !== undefined) {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: flags.timezone });
+    } catch {
+      console.error(`错误："${flags.timezone}" 不是有效的 IANA 时区标识符。\n  示例：Asia/Shanghai、America/New_York、Europe/London、UTC`);
+      process.exit(1);
+    }
+    config.timezone = flags.timezone;
+    saveConfig(config);
+    console.log(`\n时区已更新为：${flags.timezone}\n`);
+    return;
+  }
+  console.log('\n当前配置：\n');
+  console.log(JSON.stringify(config, null, 2));
   console.log();
 }
 
@@ -321,6 +414,9 @@ switch (cmd) {
   case 'edit':
     cmdUpdate(rest, flags);
     break;
+  case 'config':
+    cmdConfig(flags);
+    break;
   default:
     console.log(`
 待办事项技能脚本
@@ -330,7 +426,9 @@ switch (cmd) {
   node todos.mjs done <id>
   node todos.mjs delete <id>
   node todos.mjs update <id> [--title="新标题"] [--priority=low|medium|high] [--tags=标签1,标签2] [--due="YYYY-MM-DD HH:mm:ss"]
+  node todos.mjs config [--timezone=<IANA时区>]
 
 数据存储路径：${DB_PATH}
+当前时区：${config.timezone}
 `);
 }

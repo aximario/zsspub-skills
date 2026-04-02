@@ -20,7 +20,11 @@ const SCRIPT = fileURLToPath(new URL('./todos.mjs', import.meta.url));
 // ── 临时数据库（每个 describe 块独立隔离）────────────────────────────────────
 function makeTmpEnv() {
   const dir = mkdtempSync(join(tmpdir(), 'todos-test-'));
-  const env = { ...process.env, TODO_DB_PATH: join(dir, 'test.sqlite') };
+  const env = {
+    ...process.env,
+    TODO_DB_PATH: join(dir, 'test.sqlite'),
+    TODO_CONFIG_PATH: join(dir, 'config.json'),
+  };
   return { dir, env };
 }
 
