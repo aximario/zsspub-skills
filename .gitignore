@@ -1,5 +1,5 @@
 # Todo skill data files (per-user, not committed)
-skills-data/
+.data/
 log/
 .agents/
 skills-lock.json

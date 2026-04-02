@@ -14,11 +14,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-// ── 数据路径：{skill_install_dir}/../skills-data/zsspub-todos/data.sqlite ──
-// 即与 skill 目录（zsspub-todos/）同级的 skills-data/zsspub-todos/ 下
+// ── 数据路径：{skill_install_dir}/../.data/zsspub-todos/data.sqlite ──
+// 即与 skill 目录（zsspub-todos/）同级的 .data/zsspub-todos/ 目录下
 // 可通过环境变量 TODO_DB_PATH 覆盖（主要用于测试隔离）
 const SKILL_DIR = resolve(import.meta.dirname, '..');
-const DATA_DIR = join(SKILL_DIR, '..', 'skills-data', 'zsspub-todos');
+const DATA_DIR = join(SKILL_DIR, '..', '.data', 'zsspub-todos');
 const DB_PATH = process.env.TODO_DB_PATH ?? join(DATA_DIR, 'data.sqlite');
 
 if (!existsSync(DATA_DIR)) {
@@ -36,11 +36,12 @@ db.exec(`
     priority   TEXT    NOT NULL DEFAULT 'medium',
     tags       TEXT    NOT NULL DEFAULT '',
     due_date   TEXT,
-    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'))
+    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now'))
   )
 `);
 
 // ── 参数解析器 ───────────────────────────────────────────────────────────────
+/** 解析命令行参数，返回 { positional: string[], flags: Record<string, string|boolean> } */
 function parseArgs(argv) {
   const positional = [];
   const flags = {};
@@ -61,25 +62,47 @@ function parseArgs(argv) {
 }
 
 // ── 输出辅助函数 ──────────────────────────────────────────────────────────────
-const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 const PRIORITY_EMOJI = { high: '🔴', medium: '🟡', low: '🟢' };
 const STATUS_LABEL = { pending: '[ ]', done: '[x]' };
 
-function getNowLocal() {
+/** 将 "YYYY-MM-DD HH:mm:ss"（本地时间）转换为 UTC 格式字符串 */
+function localToUTC(localStr) {
+  const [datePart, timePart] = localStr.split(' ');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, min, sec] = timePart.split(':').map(Number);
+  const d = new Date(year, month - 1, day, hour, min, sec);
+  const p = v => String(v).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+}
+
+/** 将 "YYYY-MM-DD HH:mm:ss"（UTC）转换为本地时间格式字符串 */
+function utcToLocal(utcStr) {
+  const [datePart, timePart] = utcStr.split(' ');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, min, sec] = timePart.split(':').map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day, hour, min, sec));
+  const p = v => String(v).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/** 返回当前 UTC 时间字符串 "YYYY-MM-DD HH:mm:ss" */
+function getNowUTC() {
   const n = new Date();
   const p = v => String(v).padStart(2, '0');
-  return `${n.getFullYear()}-${p(n.getMonth()+1)}-${p(n.getDate())} ${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
+  return `${n.getUTCFullYear()}-${p(n.getUTCMonth()+1)}-${p(n.getUTCDate())} ${p(n.getUTCHours())}:${p(n.getUTCMinutes())}:${p(n.getUTCSeconds())}`;
 }
 
+/** 将一条待办记录格式化为单行显示字符串，包含序号、状态、优先级、标题、标签、截止时间和创建时间 */
 function formatRow(t) {
   const pri = PRIORITY_EMOJI[t.priority] ?? t.priority;
-  const now = getNowLocal();
+  const now = getNowUTC();
   const overdue = t.due_date && t.status === 'pending' && t.due_date < now ? ' ⚠️已过期' : '';
-  const due = t.due_date ? ` 截止:${t.due_date}${overdue}` : '';
+  const due = t.due_date ? ` 截止:${utcToLocal(t.due_date)}${overdue}` : '';
   const tags = t.tags ? ` [${t.tags}]` : '';
-  return `  ${t.id}. ${STATUS_LABEL[t.status] ?? t.status} ${pri} ${t.title}${tags}${due}  (创建时间: ${t.created_at})`;
+  return `  ${t.id}. ${STATUS_LABEL[t.status] ?? t.status} ${pri} ${t.title}${tags}${due}  (创建时间: ${utcToLocal(t.created_at)})`;
 }
 
+/** 将待办列表打印到控制台，若为空则提示无结果 */
 function printTodos(rows) {
   if (rows.length === 0) {
     console.log('没有找到待办事项。');
@@ -93,6 +116,7 @@ function printTodos(rows) {
 }
 
 // ── 验证 due_date 格式 ────────────────────────────────────────────────────────
+/** 验证 --due 参数格式（"YYYY-MM-DD HH:mm:ss"），格式不合法时退出进程，合法则原样返回，null 直接返回 */
 function validateDue(due) {
   if (!due) return null;
   if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(due)) {
@@ -104,6 +128,7 @@ function validateDue(due) {
 
 // ── 各命令实现 ────────────────────────────────────────────────────────────────
 
+/** add 命令：新增一条待办，支持 --priority、--tags、--due */
 function cmdAdd(flags, positional) {
   const title = positional[0];
   if (!title) {
@@ -116,7 +141,8 @@ function cmdAdd(flags, positional) {
     process.exit(1);
   }
   const tags = flags.tags ?? '';
-  const due_date = validateDue(flags.due ?? null);
+  const rawDue = validateDue(flags.due ?? null);
+  const due_date = rawDue ? localToUTC(rawDue) : null;
 
   const stmt = db.prepare(
     'INSERT INTO todos (title, priority, tags, due_date) VALUES (?, ?, ?, ?)'
@@ -128,6 +154,7 @@ function cmdAdd(flags, positional) {
   console.log();
 }
 
+/** list 命令：按条件查询并展示待办列表，支持 --status、--priority、--tag、--search、--due-before、--due-after */
 function cmdList(flags) {
   const status = flags.status ?? 'pending';
   if (!['pending', 'done', 'all'].includes(status)) {
@@ -161,12 +188,12 @@ function cmdList(flags) {
   if (flags['due-before']) {
     validateDue(flags['due-before']);
     conditions.push('due_date <= ?');
-    params.push(flags['due-before']);
+    params.push(localToUTC(flags['due-before']));
   }
   if (flags['due-after']) {
     validateDue(flags['due-after']);
     conditions.push('due_date >= ?');
-    params.push(flags['due-after']);
+    params.push(localToUTC(flags['due-after']));
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -179,6 +206,7 @@ function cmdList(flags) {
   printTodos(rows);
 }
 
+/** done 命令：将指定 id 的待办标记为已完成 */
 function cmdDone(positional) {
   const id = Number(positional[0]);
   if (!Number.isInteger(id) || id <= 0) {
@@ -197,6 +225,7 @@ function cmdDone(positional) {
   console.log();
 }
 
+/** delete 命令：永久删除指定 id 的待办 */
 function cmdDelete(positional) {
   const id = Number(positional[0]);
   if (!Number.isInteger(id) || id <= 0) {
@@ -212,6 +241,7 @@ function cmdDelete(positional) {
   console.log(`\n已删除待办 #${id}："${existing.title}"\n`);
 }
 
+/** update 命令：更新指定 id 待办的字段，支持 --title、--priority、--tags、--due */
 function cmdUpdate(positional, flags) {
   const id = Number(positional[0]);
   if (!Number.isInteger(id) || id <= 0) {
@@ -248,7 +278,8 @@ function cmdUpdate(positional, flags) {
     params.push(flags.tags);
   }
   if (flags.due !== undefined) {
-    const due = validateDue(flags.due === 'null' ? null : flags.due);
+    const rawDue = validateDue(flags.due === 'null' ? null : flags.due);
+    const due = rawDue ? localToUTC(rawDue) : null;
     updates.push('due_date = ?');
     params.push(due);
   }
