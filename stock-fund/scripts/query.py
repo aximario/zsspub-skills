@@ -52,9 +52,42 @@ def fmt_vol(val):
         return str(val)
 
 
+def _normalize_stock_df(df: pd.DataFrame) -> pd.DataFrame:
+    """将新浪接口的列名归一化为与东方财富接口一致的格式"""
+    # 新浪接口列名映射（stock_zh_a_spot 返回英文列名）
+    rename_map = {
+        "symbol": "代码",
+        "name": "名称",
+        "trade": "最新价",
+        "changepercent": "涨跌幅",
+        "pricechange": "涨跌额",
+        "open": "今开",
+        "settlement": "昨收",
+        "high": "最高",
+        "low": "最低",
+        "volume": "成交量",
+        "amount": "成交额",
+    }
+    df = df.rename(columns=rename_map)
+    # 新浪代码带市场前缀（如 sh600519），去掉前缀
+    if "代码" in df.columns and df["代码"].dtype == object:
+        df["代码"] = df["代码"].str.replace(r"^(sh|sz|bj)", "", regex=True)
+    return df
+
+
 def query_stock(keyword: str) -> dict:
-    """查询 A 股实时行情"""
-    df = ak.stock_zh_a_spot_em()
+    """查询 A 股实时行情。东方财富接口失败时自动切换到新浪备用接口。"""
+    df = None
+    for fetch_fn in (ak.stock_zh_a_spot_em, ak.stock_zh_a_spot):
+        try:
+            raw = fetch_fn()
+            df = raw if fetch_fn is ak.stock_zh_a_spot_em else _normalize_stock_df(raw)
+            break
+        except Exception:
+            continue
+
+    if df is None:
+        return {"error": "行情接口暂时不可用，请稍后重试"}
 
     # 精确匹配代码
     exact = df[df["代码"] == keyword]
@@ -64,7 +97,7 @@ def query_stock(keyword: str) -> dict:
         # 按名称模糊搜索
         name_match = df[df["名称"].str.contains(keyword, na=False)]
         if name_match.empty:
-            return {"error": f"未找到股票：{keyword}"}
+            return {"error": f"未找到股票：{keyword}，请确认代码或名称是否正确（仅支持 A 股，港股/指数请使用其他接口）"}
         if len(name_match) > 1:
             hits = name_match[["代码", "名称", "最新价", "涨跌幅"]].to_dict(orient="records")
             return {"multiple": hits, "message": f"找到 {len(name_match)} 只股票，请指定代码"}
@@ -93,12 +126,21 @@ def query_stock(keyword: str) -> dict:
 
 def query_etf(keyword: str) -> dict:
     """查询 ETF/LOF 实时行情"""
-    etf_df = ak.fund_etf_spot_em()
-    lof_df = ak.fund_lof_spot_em()
+    try:
+        etf_df = ak.fund_etf_spot_em()
+        etf_df["fund_type"] = "ETF"
+    except Exception:
+        etf_df = pd.DataFrame()
 
-    # 合并 ETF + LOF
-    etf_df["fund_type"] = "ETF"
-    lof_df["fund_type"] = "LOF"
+    try:
+        lof_df = ak.fund_lof_spot_em()
+        lof_df["fund_type"] = "LOF"
+    except Exception:
+        lof_df = pd.DataFrame()
+
+    if etf_df.empty and lof_df.empty:
+        return {"error": "ETF/LOF 行情接口暂时不可用，请稍后重试"}
+
     df = pd.concat([etf_df, lof_df], ignore_index=True)
 
     # 精确匹配代码
