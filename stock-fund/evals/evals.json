@@ -3,20 +3,32 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "帮我查一下平安银行现在的股票价格，代码是 000001，我想知道今天涨了还是跌了，成交量怎么样",
-      "expected_output": "展示平安银行(000001)的实时行情，包括最新价、涨跌幅（带🔴/🟢标注）、成交量/成交额，以及开盘价、最高/最低价等",
+      "prompt": "帮我查一下易方达蓝筹精选（005827）今天的估值",
+      "expected_output": "使用 query.mjs 查询 005827 的估算净值、涨跌幅，展示结果给用户",
+      "assertions": [
+        { "type": "contains", "value": "005827", "description": "输出包含基金代码" },
+        { "type": "contains", "value": "query.mjs", "description": "使用了 query.mjs 脚本" }
+      ],
       "files": []
     },
     {
       "id": 2,
-      "prompt": "我想看看沪深300ETF（代码510300）的实时价格和今天的表现，另外帮我解释一下ETF和普通基金有什么区别",
-      "expected_output": "展示510300 ETF的实时行情（最新价、涨跌幅、成交量等），并简要解释ETF与普通开放式基金的区别",
+      "prompt": "我想看看有哪些医疗相关的基金，帮我查查",
+      "expected_output": "使用 query.mjs search 医疗 搜索，列出匹配的基金代码和名称供用户选择",
+      "assertions": [
+        { "type": "contains", "value": "search", "description": "使用了 search 子命令" },
+        { "type": "contains", "value": "医疗", "description": "搜索关键词包含医疗" }
+      ],
       "files": []
     },
     {
       "id": 3,
-      "prompt": "帮我查一下易方达蓝筹精选混合基金（110022）今天的净值估算是多少，涨跌幅怎么样",
-      "expected_output": "展示110022基金的当日估算净值、估算涨跌幅，并说明这是盘中估算值，官方净值T+1公布",
+      "prompt": "帮我同时查一下 110022 和 161725 这两只基金现在估值多少",
+      "expected_output": "使用 query.mjs 同时查询两只基金的估算净值和涨跌幅",
+      "assertions": [
+        { "type": "contains", "value": "110022", "description": "查询了第一只基金" },
+        { "type": "contains", "value": "161725", "description": "查询了第二只基金" }
+      ],
       "files": []
     }
   ]
