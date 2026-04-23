@@ -22,11 +22,11 @@ metadata:
 
 首次使用前需确认配置文件存在且 apiKey 有效，若不存在则创建目录和文件。若用户未提供 api-key，提示用户先配置。
 
-读取：`ACCESS_KEY=$(jq -r '.apiKey' <config.json路径>)`
+读取：`API_KEY=$(jq -r '.apiKey' <config.json路径>)`
 
 ## API
 
-公共头：`-H "x-access-key: $ACCESS_KEY" -H "Content-Type: application/json"`
+公共头：`-H "x-api-key: $API_KEY" -H "Content-Type: application/json"`
 
 ### 持仓记录字段
 
@@ -46,7 +46,7 @@ CRUD 接口（POST/GET/PATCH）返回的持仓记录包含以下字段：
 ### POST /api/funds — 添加持仓
 
 ```bash
-curl -s -X POST https://zss.pub/api/funds -H "x-access-key: $ACCESS_KEY" -H "Content-Type: application/json" \
+curl -s -X POST https://zss.pub/api/funds -H "x-api-key: $API_KEY" -H "Content-Type: application/json" \
   -d '{"fundCode":"110011","fundName":"易方达中小盘混合","shares":1000,"cost":3.25,"channel":"支付宝","remark":"定投","targetRatio":30}'
 ```
 
@@ -63,7 +63,7 @@ curl -s -X POST https://zss.pub/api/funds -H "x-access-key: $ACCESS_KEY" -H "Con
 ### GET /api/funds — 列出所有持仓
 
 ```bash
-curl -s https://zss.pub/api/funds -H "x-access-key: $ACCESS_KEY"
+curl -s https://zss.pub/api/funds -H "x-api-key: $API_KEY"
 ```
 
 返回用户所有基金持仓，按创建时间倒序排列。
@@ -71,7 +71,7 @@ curl -s https://zss.pub/api/funds -H "x-access-key: $ACCESS_KEY"
 ### GET /api/funds/realtime — 实时净值/估值
 
 ```bash
-curl -s https://zss.pub/api/funds/realtime -H "x-access-key: $ACCESS_KEY"
+curl -s https://zss.pub/api/funds/realtime -H "x-api-key: $API_KEY"
 ```
 
 返回用户所有持仓基金的实时数据，每条包含：
@@ -99,7 +99,7 @@ curl -s https://zss.pub/api/funds/lookup/110011
 ### GET /api/funds/:id — 获取单条持仓
 
 ```bash
-curl -s https://zss.pub/api/funds/3 -H "x-access-key: $ACCESS_KEY"
+curl -s https://zss.pub/api/funds/3 -H "x-api-key: $API_KEY"
 ```
 
 返回单条持仓记录，不存在时返回 404。
@@ -107,7 +107,7 @@ curl -s https://zss.pub/api/funds/3 -H "x-access-key: $ACCESS_KEY"
 ### PATCH /api/funds/:id — 更新持仓
 
 ```bash
-curl -s -X PATCH https://zss.pub/api/funds/2 -H "x-access-key: $ACCESS_KEY" -H "Content-Type: application/json" \
+curl -s -X PATCH https://zss.pub/api/funds/2 -H "x-api-key: $API_KEY" -H "Content-Type: application/json" \
   -d '{"shares":2000,"cost":3.10}'
 ```
 
@@ -116,7 +116,7 @@ curl -s -X PATCH https://zss.pub/api/funds/2 -H "x-access-key: $ACCESS_KEY" -H "
 ### DELETE /api/funds/:id — 删除持仓
 
 ```bash
-curl -s -X DELETE https://zss.pub/api/funds/5 -H "x-access-key: $ACCESS_KEY"
+curl -s -X DELETE https://zss.pub/api/funds/5 -H "x-api-key: $API_KEY"
 ```
 
 响应：204 No Content
